@@ -12,8 +12,8 @@
         video { width: 100%; height: 240px; background: #000; border-radius: 12px; object-fit: cover; }
         .input-group { display: flex; flex-direction: column; gap: 0.5rem; background: #1e293b; padding: 1rem; border-radius: 12px; }
         input, select { padding: 0.75rem; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; }
-        button { padding: 1rem; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; background: #0284c7; color: white; }
-        .status-box { background: #1e293b; padding: 1rem; font-family: monospace; font-size: 0.75rem; height: 200px; overflow-y: auto; color: #38bdf8; border: 1px solid #334155; }
+        button { padding: 1rem; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; background: #0284c7; color: white; margin-bottom: 0.5rem; }
+        .status-box { background: #1e293b; padding: 1rem; font-family: monospace; font-size: 0.75rem; height: 200px; overflow-y: auto; color: #38bdf8; border: 1px solid #334155; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -22,10 +22,14 @@
         <video id="webcam" autoplay playsinline muted></video>
         <div class="input-group">
             <input type="password" id="apiKey" placeholder="Pega tu API Key aquí">
-            <select id="voiceSelect"><option value="Aoede">Aoede (Cálida)</option></select>
+            <label for="modelSelect">Modelo disponible:</label>
+            <select id="modelSelect">
+                <option value="models/gemini-2.0-flash-exp">Cargando lista...</option>
+            </select>
         </div>
-        <button id="toggleBtn" onclick="toggleConnection()">Iniciar Conexión</button>
-        <div class="status-box" id="logBox">Esperando...</div>
+        <button onclick="checkModels()" style="background:#334155;">1. Consultar Modelos Disponibles</button>
+        <button id="toggleBtn" onclick="toggleConnection()">2. Iniciar Conexión</button>
+        <div class="status-box" id="logBox">Pega tu API Key y toca "Consultar Modelos Disponibles"</div>
     </div>
 
     <script>
@@ -37,7 +41,6 @@
 
         async function initCamera() {
             try {
-                // Mantenemos la configuración de cámara trasera
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: "environment" } },
                     audio: true
@@ -46,30 +49,56 @@
             } catch (err) { log("Error cámara: " + err.message); }
         }
 
+        async function checkModels() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) return alert("Pega tu API Key primero");
+            
+            log("Consultando modelos habilitados...");
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1alpha/models?key=${apiKey}`);
+                const data = await res.json();
+                
+                if (data.models) {
+                    const select = document.getElementById('modelSelect');
+                    select.innerHTML = '';
+                    
+                    log("Modelos encontrados para tu API Key:");
+                    data.models.forEach(m => {
+                        const cleanName = m.name;
+                        log(`- ${cleanName}`);
+                        const opt = document.createElement('option');
+                        opt.value = cleanName;
+                        opt.innerText = cleanName.replace('models/', '');
+                        select.appendChild(opt);
+                    });
+                } else {
+                    log("Error consultando: " + JSON.stringify(data));
+                }
+            } catch (err) {
+                log("Error de conexión al consultar modelos: " + err.message);
+            }
+        }
+
         function connect() {
             const apiKey = document.getElementById('apiKey').value.trim();
+            const selectedModel = document.getElementById('modelSelect').value;
             const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
             
+            log("Conectando con modelo: " + selectedModel);
             ws = new WebSocket(URL);
 
             ws.onopen = () => {
                 log("Conectado. Enviando configuración...");
                 ws.send(JSON.stringify({
                     setup: {
-                        model: "models/gemini-2.0-flash-exp",
+                        model: selectedModel,
                         generationConfig: { responseModalities: ["AUDIO"] }
                     }
                 }));
             };
 
-            ws.onmessage = (event) => {
-                log("Respuesta recibida.");
-            };
-
-            ws.onclose = (event) => {
-                log("CONEXIÓN CERRADA. Código: " + event.code + " Razón: " + event.reason);
-            };
-
+            ws.onmessage = (event) => { log("Respuesta recibida."); };
+            ws.onclose = (event) => { log("CONEXIÓN CERRADA. Código: " + event.code + " Razón: " + event.reason); };
             ws.onerror = (err) => { log("Error: " + err); };
         }
 
