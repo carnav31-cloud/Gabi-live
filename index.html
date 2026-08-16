@@ -24,7 +24,7 @@
             <input type="password" id="apiKey" placeholder="Pega tu API Key aquí">
             <label for="modelSelect">Modelo disponible:</label>
             <select id="modelSelect">
-                <option value="models/gemini-2.0-flash-exp">Cargando lista...</option>
+                <option value="models/gemini-2.5-flash-native-audio-latest">gemini-2.5-flash-native-audio-latest</option>
             </select>
         </div>
         <button onclick="checkModels()" style="background:#334155;">1. Consultar Modelos Disponibles</button>
@@ -62,8 +62,15 @@
                     const select = document.getElementById('modelSelect');
                     select.innerHTML = '';
                     
+                    // Ordenar colocando los modelos native-audio al principio
+                    const sortedModels = data.models.sort((a, b) => {
+                        const aAudio = a.name.includes('native-audio');
+                        const bAudio = b.name.includes('native-audio');
+                        return bAudio - aAudio;
+                    });
+
                     log("Modelos encontrados para tu API Key:");
-                    data.models.forEach(m => {
+                    sortedModels.forEach(m => {
                         const cleanName = m.name;
                         log(`- ${cleanName}`);
                         const opt = document.createElement('option');
