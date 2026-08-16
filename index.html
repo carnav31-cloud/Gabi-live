@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -38,6 +38,7 @@
         let audioCtx = null;
         let audioOutputCtx = null;
         let frameInterval = null;
+        let processor = null;
         let nextStartTime = 0;
         const logBox = document.getElementById('logBox');
         
@@ -84,6 +85,18 @@
             } catch (err) { log("Error: " + err.message); }
         }
 
+        function stopStreaming() {
+            if (frameInterval) clearInterval(frameInterval);
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
+        }
+
         function startTransmitting() {
             if (!audioOutputCtx) audioOutputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
             audioOutputCtx.resume();
@@ -94,19 +107,21 @@
 
             frameInterval = setInterval(() => {
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                canvas.width = videoEl.videoWidth / 4 || 160;
-                canvas.height = videoEl.videoHeight / 4 || 120;
+                canvas.width = 160;
+                canvas.height = 120;
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
                 const base64Image = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
 
                 ws.send(JSON.stringify({
-                    realtimeInput: { mediaChunks: [{ mimeType: "image/jpeg", data: base64Image }] }
+                    realtimeInput: {
+                        mediaChunks: [{ mimeType: "image/jpeg", data: base64Image }]
+                    }
                 }));
             }, 1000);
 
             audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             const source = audioCtx.createMediaStreamSource(mediaStream);
-            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
             processor.onaudioprocess = (e) => {
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -125,7 +140,7 @@
 
                 ws.send(JSON.stringify({
                     realtimeInput: {
-                        mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Audio }]
+                        mediaChunks: [{ mimeType: "audio/pcm", data: base64Audio }]
                     }
                 }));
             };
@@ -160,8 +175,8 @@
 
         function toggleConnection() {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                stopStreaming();
                 ws.close();
-                if (frameInterval) clearInterval(frameInterval);
                 log("Conexión detenida.");
                 return;
             }
@@ -181,12 +196,18 @@
                         generationConfig: { responseModalities: ["AUDIO"] } 
                     }
                 }));
-                startTransmitting();
             };
 
             ws.onmessage = (event) => {
                 try {
                     const response = JSON.parse(event.data);
+                    // Si recibimos la confirmación de setup o la primera respuesta
+                    if (response.setupComplete) {
+                        log("Setup confirmado por el servidor.");
+                        startTransmitting();
+                        return;
+                    }
+
                     const parts = response.serverContent?.modelTurn?.parts;
                     if (parts) {
                         parts.forEach(p => {
@@ -199,7 +220,7 @@
             };
 
             ws.onclose = (event) => { 
-                if (frameInterval) clearInterval(frameInterval);
+                stopStreaming();
                 log("Conexión cerrada: " + event.code); 
             };
             ws.onerror = (err) => { log("Error WS"); };
@@ -208,4 +229,4 @@
         initCamera();
     </script>
 </body>
-</html>
+</html>   
