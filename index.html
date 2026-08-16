@@ -1,4 +1,4 @@
-   <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -47,19 +47,11 @@
         async function initCamera() {
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: "environment" } },
+                    video: { facingMode: { ideal: "environment" } },
                     audio: true
                 });
                 document.getElementById('webcam').srcObject = mediaStream;
-            } catch (err) {
-                try {
-                    mediaStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: "environment" } },
-                        audio: true
-                    });
-                    document.getElementById('webcam').srcObject = mediaStream;
-                } catch (e) { log("Error cámara: " + e.message); }
-            }
+            } catch (err) { log("Error cámara/micrófono: " + err.message); }
         }
 
         async function checkModels() {
@@ -87,14 +79,8 @@
 
         function stopStreaming() {
             if (frameInterval) clearInterval(frameInterval);
-            if (processor) {
-                processor.disconnect();
-                processor = null;
-            }
-            if (audioCtx) {
-                audioCtx.close();
-                audioCtx = null;
-            }
+            if (processor) { processor.disconnect(); processor = null; }
+            if (audioCtx) { audioCtx.close(); audioCtx = null; }
         }
 
         function startTransmitting() {
@@ -110,7 +96,7 @@
                 canvas.width = 160;
                 canvas.height = 120;
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                const base64Image = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+                const base64Image = canvas.toDataURL('image/jpeg', 0.4).split(',')[1];
 
                 ws.send(JSON.stringify({
                     realtimeInput: {
@@ -133,9 +119,7 @@
                 
                 let binary = '';
                 const bytes = new Uint8Array(pcm16.buffer);
-                for (let i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
+                for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
                 const base64Audio = btoa(binary);
 
                 ws.send(JSON.stringify({
@@ -147,7 +131,7 @@
 
             source.connect(processor);
             processor.connect(audioCtx.destination);
-            log("Transmitiendo micrófono y cámara trasera.");
+            log("Sincronización activa. Transmitiendo...");
         }
 
         function playAudioChunk(base64Pcm) {
@@ -189,25 +173,27 @@
             ws = new WebSocket(URL);
 
             ws.onopen = () => {
-                log("Conectado. Enviando Setup...");
+                log("Conectado. Enviando Setup v1alpha...");
                 ws.send(JSON.stringify({
-                    setup: { 
-                        model: selectedModel, 
-                        generationConfig: { responseModalities: ["AUDIO"] } 
+                    setup: {
+                        model: selectedModel,
+                        generationConfig: {
+                            responseModalities: ["AUDIO"]
+                        }
                     }
                 }));
+
+                // Esperar 500ms tras enviar setup para comenzar el envío de medios
+                setTimeout(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        startTransmitting();
+                    }
+                }, 500);
             };
 
             ws.onmessage = (event) => {
                 try {
                     const response = JSON.parse(event.data);
-                    // Si recibimos la confirmación de setup o la primera respuesta
-                    if (response.setupComplete) {
-                        log("Setup confirmado por el servidor.");
-                        startTransmitting();
-                        return;
-                    }
-
                     const parts = response.serverContent?.modelTurn?.parts;
                     if (parts) {
                         parts.forEach(p => {
@@ -216,17 +202,17 @@
                             }
                         });
                     }
-                } catch (e) {}
+                } catch (e) { log("Error procesando mensaje: " + e.message); }
             };
 
             ws.onclose = (event) => { 
                 stopStreaming();
-                log("Conexión cerrada: " + event.code); 
+                log("Conexión cerrada. Código: " + event.code); 
             };
-            ws.onerror = (err) => { log("Error WS"); };
+            ws.onerror = (err) => { log("Error de WebSocket"); };
         }
 
         initCamera();
     </script>
 </body>
-</html>   
+</html>
