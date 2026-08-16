@@ -1,85 +1,22 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gabi Live - Tiempo Real</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; padding: 1rem; min-height: 100vh; }
-        h1 { color: #38bdf8; margin-bottom: 1rem; font-size: 1.5rem; }
-        .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 1rem; }
-        video { width: 100%; height: 240px; background: #000; border-radius: 12px; object-fit: cover; }
-        .input-group { display: flex; flex-direction: column; gap: 0.5rem; background: #1e293b; padding: 1rem; border-radius: 12px; }
-        input, select { padding: 0.75rem; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; }
-        button { padding: 1rem; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; background: #0284c7; color: white; margin-bottom: 0.5rem; }
-        button:disabled { background: #475569; }
-        .status-box { background: #1e293b; padding: 1rem; font-family: monospace; font-size: 0.75rem; height: 200px; overflow-y: auto; color: #38bdf8; border: 1px solid #334155; white-space: pre-wrap; }
-    </style>
-</head>
+<html>
 <body>
-    <h1>Gabi Live: Tiempo Real</h1>
-    <div class="container">
-        <video id="webcam" autoplay playsinline muted></video>
-        <div class="input-group">
-            <input type="password" id="apiKey" placeholder="Pega tu API Key aquí">
-            <select id="modelSelect">
-                <!-- Lo intentaremos con el modelo base estándar -->
-                <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
-            </select>
-        </div>
-        <button id="toggleBtn" onclick="toggleConnection()">Iniciar Conexión</button>
-        <div class="status-box" id="logBox">Pega tu API Key y presiona "Iniciar Conexión"</div>
-    </div>
+    <input type="password" id="key" placeholder="Pega tu API Key">
+    <button onclick="check()">Consultar Modelos Disponibles</button>
+    <pre id="result"></pre>
 
     <script>
-        let ws = null;
-        const logBox = document.getElementById('logBox');
-        const btn = document.getElementById('toggleBtn');
-        
-        function log(msg) { logBox.innerText += `\n> ${msg}`; logBox.scrollTop = logBox.scrollHeight; }
-
-        async function toggleConnection() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            const model = document.getElementById('modelSelect').value;
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
-                return;
+        async function check() {
+            const key = document.getElementById('key').value;
+            // Consultamos la v1beta, que suele ser más permisiva
+            const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+            } catch (e) {
+                document.getElementById('result').innerText = "Error: " + e.message;
             }
-
-            btn.disabled = true;
-            btn.innerText = "Conectando...";
-            
-            // Usamos la URL correcta para Realtime API
-            const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-            
-            ws = new WebSocket(URL);
-
-            ws.onopen = () => {
-                log("Conectado. Enviando Setup...");
-                // Nota: Algunos endpoints requieren el prefijo 'models/' otros no. 
-                // Probamos sin el prefijo si da error 1008
-                ws.send(JSON.stringify({
-                    setup: { 
-                        model: model, 
-                        generationConfig: { responseModalities: ["AUDIO"] } 
-                    }
-                }));
-            };
-
-            ws.onmessage = async (event) => {
-                let data = event.data;
-                if (data instanceof Blob) data = await data.text();
-                log("Respuesta servidor: " + data.substring(0, 50) + "...");
-            };
-
-            ws.onclose = (event) => { 
-                log("Cierre: " + event.code + " (" + event.reason + ")"); 
-                btn.disabled = false;
-                btn.innerText = "Iniciar Conexión";
-            };
-            ws.onerror = () => { log("Error WebSocket"); btn.disabled = false; };
         }
     </script>
 </body>
