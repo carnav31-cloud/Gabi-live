@@ -13,6 +13,7 @@
         .input-group { display: flex; flex-direction: column; gap: 0.5rem; background: #1e293b; padding: 1rem; border-radius: 12px; }
         input, select { padding: 0.75rem; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; }
         button { padding: 1rem; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; background: #0284c7; color: white; margin-bottom: 0.5rem; }
+        button:disabled { background: #475569; cursor: not-allowed; }
         .status-box { background: #1e293b; padding: 1rem; font-family: monospace; font-size: 0.75rem; height: 200px; overflow-y: auto; color: #38bdf8; border: 1px solid #334155; white-space: pre-wrap; }
     </style>
 </head>
@@ -22,14 +23,12 @@
         <video id="webcam" autoplay playsinline muted></video>
         <div class="input-group">
             <input type="password" id="apiKey" placeholder="Pega tu API Key aquí">
-            <label for="modelSelect">Modelo disponible:</label>
             <select id="modelSelect">
-                <option value="models/gemini-2.5-flash-native-audio-latest">gemini-2.5-flash-native-audio-latest</option>
+                <option value="models/gemini-2.0-flash-exp" selected>gemini-2.0-flash-exp</option>
             </select>
         </div>
-        <button onclick="checkModels()" style="background:#334155;">1. Consultar Modelos Disponibles</button>
-        <button id="toggleBtn" onclick="toggleConnection()">2. Iniciar Conexión</button>
-        <div class="status-box" id="logBox">Pega tu API Key y toca "Consultar Modelos Disponibles"</div>
+        <button id="toggleBtn" onclick="toggleConnection()">Iniciar Conexión</button>
+        <div class="status-box" id="logBox">Presiona "Iniciar Conexión"</div>
     </div>
 
     <script>
@@ -41,154 +40,105 @@
         let processor = null;
         let nextStartTime = 0;
         const logBox = document.getElementById('logBox');
+        const btn = document.getElementById('toggleBtn');
         
         function log(msg) { logBox.innerText += `\n> ${msg}`; logBox.scrollTop = logBox.scrollHeight; }
 
         async function initCamera() {
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
-                    audio: true
-                });
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('webcam').srcObject = mediaStream;
-            } catch (err) { log("Error cámara/mic: " + err.message); }
-        }
-
-        async function checkModels() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            if (!apiKey) return alert("Pega tu API Key primero");
-            
-            log("Consultando modelos...");
-            try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1alpha/models?key=${apiKey}`);
-                const data = await res.json();
-                if (data.models) {
-                    const select = document.getElementById('modelSelect');
-                    select.innerHTML = '';
-                    const sortedModels = data.models.sort((a, b) => b.name.includes('native-audio') - a.name.includes('native-audio'));
-                    sortedModels.forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m.name;
-                        opt.innerText = m.name.replace('models/', '');
-                        select.appendChild(opt);
-                    });
-                    log("Lista de modelos actualizada.");
-                }
-            } catch (err) { log("Error: " + err.message); }
+            } catch (err) { log("Error acceso cámara: " + err.message); }
         }
 
         function stopStreaming() {
             if (frameInterval) clearInterval(frameInterval);
             if (processor) { processor.disconnect(); processor = null; }
             if (audioCtx) { audioCtx.close(); audioCtx = null; }
+            btn.innerText = "Iniciar Conexión";
+            btn.disabled = false;
+        }
+
+        async function toggleConnection() {
+            log("Clic registrado.");
+            
+            // Si ya estamos conectados, desconectamos
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                stopStreaming(); ws.close(); return;
+            }
+
+            // Si estamos conectando (estado 0), no hacer nada
+            if (ws && ws.readyState === WebSocket.CONNECTING) {
+                log("Conectando, espera..."); return;
+            }
+
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) { alert("Ingresa API Key"); return; }
+            
+            btn.disabled = true;
+            btn.innerText = "Conectando...";
+            
+            const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+            
+            ws = new WebSocket(URL);
+
+            ws.onopen = () => {
+                log("Socket abierto. Enviando Setup...");
+                ws.send(JSON.stringify({
+                    setup: { model: "models/gemini-2.0-flash-exp", generationConfig: { responseModalities: ["AUDIO"] } }
+                }));
+                
+                setTimeout(() => {
+                    log("Iniciando transmisión de audio/video...");
+                    btn.innerText = "Desconectar";
+                    btn.disabled = false;
+                    startTransmitting();
+                }, 1000);
+            };
+
+            ws.onmessage = async (event) => {
+                let data = event.data;
+                if (data instanceof Blob) data = await data.text();
+                try {
+                    const response = JSON.parse(data);
+                    // Lógica futura de manejo de audio
+                } catch(e) {}
+            };
+
+            ws.onclose = (event) => { 
+                log("Cierre: " + event.code + " (" + (event.reason || "Sin razón") + ")"); 
+                stopStreaming();
+            };
+            ws.onerror = (e) => { log("Error WebSocket"); btn.disabled = false; };
         }
 
         function startTransmitting() {
             if (!audioOutputCtx) audioOutputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-            audioOutputCtx.resume();
-
+            
             const videoEl = document.getElementById('webcam');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
             frameInterval = setInterval(() => {
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                canvas.width = 160;
-                canvas.height = 120;
+                canvas.width = 160; canvas.height = 120;
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
                 const base64Image = canvas.toDataURL('image/jpeg', 0.4).split(',')[1];
-
-                ws.send(JSON.stringify({
-                    realtimeInput: { mediaChunks: [{ mimeType: "image/jpeg", data: base64Image }] }
-                }));
+                ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "image/jpeg", data: base64Image }] } }));
             }, 1000);
 
             audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             const source = audioCtx.createMediaStreamSource(mediaStream);
             processor = audioCtx.createScriptProcessor(4096, 1, 1);
-
             processor.onaudioprocess = (e) => {
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
                 const inputData = e.inputBuffer.getChannelData(0);
                 const pcm16 = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    pcm16[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
-                }
+                for (let i = 0; i < inputData.length; i++) pcm16[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
                 const base64Audio = btoa(String.fromCharCode(...new Uint8Array(pcm16.buffer)));
-                ws.send(JSON.stringify({
-                    realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm", data: base64Audio }] }
-                }));
+                ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm", data: base64Audio }] } }));
             };
-
-            source.connect(processor);
-            processor.connect(audioCtx.destination);
-            log("Transmisión activa.");
-        }
-
-        function playAudioChunk(base64Pcm) {
-            if (!audioOutputCtx) return;
-            const binary = atob(base64Pcm);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            
-            const float32 = new Float32Array(bytes.length / 2);
-            const int16 = new Int16Array(bytes.buffer);
-            for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768.0;
-
-            const buffer = audioOutputCtx.createBuffer(1, float32.length, 24000);
-            buffer.getChannelData(0).set(float32);
-
-            const source = audioOutputCtx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioOutputCtx.destination);
-
-            const now = audioOutputCtx.currentTime;
-            const startTime = Math.max(now, nextStartTime);
-            source.start(startTime);
-            nextStartTime = startTime + buffer.duration;
-        }
-
-        function toggleConnection() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                stopStreaming();
-                ws.close();
-                log("Conexión cerrada.");
-                return;
-            }
-
-            const apiKey = document.getElementById('apiKey').value.trim();
-            const selectedModel = document.getElementById('modelSelect').value;
-            const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-            
-            ws = new WebSocket(URL);
-
-            ws.onopen = () => {
-                log("Conectado. Enviando Setup...");
-                ws.send(JSON.stringify({
-                    setup: { model: selectedModel, generationConfig: { responseModalities: ["AUDIO"] } }
-                }));
-                setTimeout(startTransmitting, 500);
-            };
-
-            ws.onmessage = async (event) => {
-                try {
-                    // Corrección: Manejo de datos ya sean Blob o String
-                    let data = event.data;
-                    if (data instanceof Blob) data = await data.text();
-                    
-                    const response = JSON.parse(data);
-                    
-                    const parts = response.serverContent?.modelTurn?.parts;
-                    if (parts) {
-                        parts.forEach(p => {
-                            if (p.inlineData && p.inlineData.data) playAudioChunk(p.inlineData.data);
-                        });
-                    }
-                } catch (e) { /* Error silencioso para logs técnicos innecesarios */ }
-            };
-
-            ws.onclose = (event) => { stopStreaming(); log("Conexión cerrada: " + event.code); };
-            ws.onerror = () => { log("Error en WebSocket"); };
+            source.connect(processor); processor.connect(audioCtx.destination);
         }
 
         initCamera();
