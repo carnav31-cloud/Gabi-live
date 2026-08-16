@@ -1,399 +1,201 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gabi Live - Tiempo Real</title>
-<style>
-* { box-sizing: border-box; }
-body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background-color: #0f172a;
-    color: #f8fafc;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 16px;
-    margin: 0;
-}
-h1 { color: #38bdf8; font-size: 1.3rem; margin-bottom: 8px; text-align: center; }
-.container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 400px;
-    width: 100%;
-    gap: 10px;
-}
-video {
-    width: 100%;
-    border-radius: 12px;
-    border: 2px solid #334155;
-    background-color: #000;
-    max-height: 160px;
-    object-fit: cover;
-}
-canvas { display: none; }
-.status-badge {
-    padding: 12px 20px;
-    border-radius: 20px;
-    font-size: 0.95rem;
-    font-weight: bold;
-    text-align: center;
-    width: 100%;
-    background-color: #334155;
-    color: #f8fafc;
-    transition: background-color 0.3s;
-}
-.status-badge.connected { background-color: #15803d; color: #dcfce7; }
-.status-badge.speaking { background-color: #0284c7; color: #e0f2fe; }
-.status-badge.connecting { background-color: #854d0e; color: #fef08a; }
-.btn {
-    background-color: #0284c7;
-    color: white;
-    border: none;
-    padding: 14px;
-    font-size: 1.1rem;
-    border-radius: 12px;
-    cursor: pointer;
-    width: 100%;
-    font-weight: 600;
-}
-.btn.stop { background-color: #991b1b; }
-.controls-panel {
-    background-color: #1e293b;
-    border: 1px solid #334155;
-    padding: 10px 12px;
-    border-radius: 10px;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.85rem;
-}
-select, input[type="password"] {
-    background: #0f172a;
-    color: #f8fafc;
-    border: 1px solid #334155;
-    padding: 6px;
-    border-radius: 6px;
-    width: 55%;
-}
-.memory-box {
-    background-color: #1e293b;
-    border: 1px dashed #0284c7;
-    padding: 8px 10px;
-    border-radius: 8px;
-    width: 100%;
-    font-size: 0.75rem;
-    color: #38bdf8;
-    max-height: 110px;
-    overflow-y: auto;
-}
-#log {
-    background-color: #1e293b;
-    border-radius: 10px;
-    padding: 12px;
-    width: 100%;
-    min-height: 120px;
-    font-family: monospace;
-    font-size: 0.82rem;
-    color: #94a3b8;
-    border: 1px solid #334155;
-    overflow-y: auto;
-    max-height: 200px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gabi Live - Tiempo Real</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+        h1 { color: #38bdf8; margin-bottom: 1rem; font-size: 1.5rem; }
+        .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 1rem; }
+        video { width: 100%; height: 240px; background: #000; border-radius: 12px; object-fit: cover; }
+        .input-group { display: flex; flex-direction: column; gap: 0.5rem; background: #1e293b; padding: 1rem; border-radius: 12px; }
+        label { font-size: 0.9rem; color: #94a3b8; }
+        input, select { padding: 0.75rem; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 1rem; }
+        button { padding: 1rem; border-radius: 12px; border: none; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: #0284c7; color: white; }
+        .btn-primary:disabled { background: #334155; color: #64748b; }
+        .status-box { background: #1e293b; border-radius: 12px; padding: 1rem; font-family: monospace; font-size: 0.85rem; height: 180px; overflow-y: auto; color: #38bdf8; border: 1px solid #334155; }
+        .status-disconnected { color: #ef4444; }
+        .status-connected { color: #22c55e; }
+    </style>
 </head>
 <body>
 
-<div class="container">
-<h1>Gabi Live: Tiempo Real</h1>
-<video id="webcam" autoplay playsinline muted></video>
-<canvas id="canvas"></canvas>
+    <h1>Gabi Live: Tiempo Real</h1>
 
-<div class="controls-panel">
-    <label for="apiKey">API Key:</label>
-    <input type="password" id="apiKey" placeholder="Tu Gemini API Key">
-</div>
+    <div class="container">
+        <video id="webcam" autoplay playsinline muted></video>
 
-<div class="controls-panel">
-    <label for="voiceSelect">Voz de Gabi:</label>
-    <select id="voiceSelect">
-        <option value="Aoede">Aoede (Cálida)</option>
-        <option value="Kore">Kore (Juvenil)</option>
-        <option value="Fenrir">Fenrir (Formal)</option>
-        <option value="Puck">Puck (Casual)</option>
-    </select>
-</div>
+        <div class="input-group">
+            <label for="apiKey">API Key:</label>
+            <input type="password" id="apiKey" placeholder="Pega tu Gemini API Key aquí">
+            
+            <label for="voiceSelect">Voz de Gabi:</label>
+            <select id="voiceSelect">
+                <option value="Aoede">Aoede (Cálida)</option>
+                <option value="Puck">Puck (Animada)</option>
+                <option value="Charon">Charon (Grave)</option>
+                <option value="Kore">Kore (Relajada)</option>
+                <option value="Fenrir">Fenrir (Intensa)</option>
+            </select>
+        </div>
 
-<div id="statusBadge" class="status-badge">Desconectado</div>
-<button id="btnToggle" class="btn">Iniciar Conexión Live</button>
+        <button id="toggleBtn" class="btn-primary" onclick="toggleConnection()">Iniciar Conexión Live</button>
 
-<div id="memoryDisplay" class="memory-box">Memoria Social: Inicializando...</div>
-<div id="log">Ingresa tu API Key y presiona Iniciar...</div>
-</div>
+        <div class="status-box" id="logBox">Ingresa tu API Key y presiona Iniciar...</div>
+    </div>
 
-<script>
-let ws = null;
-let audioCtx = null;
-let mediaStream = null;
-let audioProcessor = null;
-let frameInterval = null;
+    <script>
+        let ws = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let isConnected = false;
+        let frameInterval = null;
 
-const statusBadge = document.getElementById('statusBadge');
-const btnToggle = document.getElementById('btnToggle');
-const logDiv = document.getElementById('log');
-const video = document.getElementById('webcam');
-const canvas = document.getElementById('canvas');
-const memoryDisplay = document.getElementById('memoryDisplay');
-const voiceSelect = document.getElementById('voiceSelect');
-const apiKeyInput = document.getElementById('apiKey');
+        const logBox = document.getElementById('logBox');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const webcam = document.getElementById('webcam');
 
-let ubicacionActual = "Concepción, Chile";
-let persistentMemory = { personasCercanas: [], objetosObservados: [] };
+        function log(msg) {
+            logBox.innerText += `\n> ${msg}`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
 
-window.addEventListener('DOMContentLoaded', () => {
-    loadPersistentMemory();
-    initCamera();
-    const savedKey = localStorage.getItem('gabi_api_key');
-    if (savedKey) apiKeyInput.value = savedKey;
-});
+        async function initCamera() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480 },
+                    audio: true
+                });
+                webcam.srcObject = mediaStream;
+                log("Cámara y micrófono iniciados.");
+            } catch (err) {
+                log("Error accediendo a cámara/micrófono: " + err.message);
+            }
+        }
 
-function loadPersistentMemory() {
-    const saved = localStorage.getItem('gabi_persistent_memory_social');
-    if (saved) {
-        try { persistentMemory = JSON.parse(saved); } catch(e){}
-    }
-    updateMemoryDisplay();
-}
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
 
-function updateMemoryDisplay() {
-    const personas = persistentMemory.personasCercanas.map(p => `${p.nombre} (${p.rol || 'Cercano'})`).join(', ') || "Nadie registrado";
-    memoryDisplay.innerHTML = `<b>Círculo Registrado:</b><br>• Personas: ${personas}`;
-}
+        function connect() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const voice = document.getElementById('voiceSelect').value;
 
-function log(msg) {
-    logDiv.innerHTML += `<div>> ${msg}</div>`;
-    logDiv.scrollTop = logDiv.scrollHeight;
-}
+            if (!apiKey) {
+                alert("Por favor ingresa tu API Key");
+                return;
+            }
 
-function setStatus(text, stateClass) {
-    statusBadge.innerText = text;
-    statusBadge.className = "status-badge " + (stateClass || "");
-}
+            log("Iniciando WebSocket con Gemini Multimodal Live API...");
+            
+            // Endpoint v1alpha necesario para el WebSocket Bidireccional
+            const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
-async function initCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
-            audio: false
-        });
-        video.srcObject = stream;
-    } catch (e) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            video.srcObject = stream;
-        } catch(ex) { log("No se pudo acceder a la cámara."); }
-    }
-}
+            ws = new WebSocket(URL);
 
-async function startLiveSession() {
-    const apiKey = apiKeyInput.value.trim();
-    if (!apiKey) {
-        alert("Por favor ingresa tu Gemini API Key.");
-        return;
-    }
-    localStorage.setItem('gabi_api_key', apiKey);
-
-    setStatus("Conectando...", "connecting");
-    log("Iniciando WebSocket con Gemini Multimodal Live API...");
-
-    const host = "generativelanguage.googleapis.com";
-    const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-
-    ws = new WebSocket(uri);
-
-    ws.onopen = async () => {
-        setStatus("Conectado", "connected");
-        log("Conexión establecida.");
-        
-        const selectedVoice = voiceSelect.value;
-        const personasTexto = persistentMemory.personasCercanas.map(p => `${p.nombre} (${p.rol})`).join(', ') || "Ninguna";
-        
-        const setupMsg = {
-            setup: {
-                model: "models/gemini-2.0-flash-exp",
-                generationConfig: {
-                    responseModalities: ["AUDIO"],
-                    speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } }
+            ws.onopen = () => {
+                log("Conexión establecida. Enviando configuración...");
+                
+                // Mensaje obligatorio de Setup inicial
+                const setupMessage = {
+                    setup: {
+                        model: "models/gemini-2.0-flash-exp",
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: {
+                                voiceConfig: {
+                                    prebuiltVoiceConfig: {
+                                        voiceName: voice
+                                    }
+                                }
+                            }
+                        }
                     }
-                },
-                systemInstruction: {
-                    parts: [{
-                        text: `Eres Gabi, una androide conversacional muy cercana, empática y natural.
-Ubicación actual: ${ubicacionActual}.
-Círculo cercano registrado: ${personasTexto}.
-Saluda afectuosamente si ves o reconoces a alguien del círculo cercano.
-Responde de forma concisa, fluida y conversacional en español.`
-                    }]
+                };
+                
+                ws.send(JSON.stringify(setupMessage));
+                isConnected = true;
+                toggleBtn.innerText = "Desconectar";
+                toggleBtn.style.background = "#dc2626";
+
+                startStreamingFrames();
+            };
+
+            ws.onmessage = async (event) => {
+                if (event.data instanceof Blob) {
+                    log("Respuesta de audio recibida.");
+                } else {
+                    const data = JSON.parse(event.data);
+                    if (data.serverContent?.modelTurn?.parts) {
+                        log("Gabi está respondiendo...");
+                    }
                 }
-            }
-        };
-        ws.send(JSON.stringify(setupMsg));
+            };
 
-        await startAudioInput();
-        startVideoFrames();
-        btnToggle.innerText = "Detener Conexión";
-        btnToggle.className = "btn stop";
-    };
+            ws.onerror = (err) => {
+                log("Error en WebSocket: " + JSON.stringify(err));
+            };
 
-    ws.onmessage = async (event) => {
-        let data;
-        if (event.data instanceof Blob) {
-            data = JSON.parse(await event.data.text());
-        } else {
-            data = JSON.parse(event.data);
+            ws.onclose = () => {
+                log("Conexión cerrada.");
+                disconnect();
+            };
         }
 
-        if (data.serverContent && data.serverContent.modelTurn) {
-            const parts = data.serverContent.modelTurn.parts;
-            for (const part of parts) {
-                if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-                    playPcmAudio(part.inlineData.data);
-                }
-            }
+        function startStreamingFrames() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 320;
+            canvas.height = 240;
+
+            frameInterval = setInterval(() => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+                ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+
+                const frameMessage = {
+                    realtimeInput: {
+                        mediaChunks: [
+                            {
+                                mimeType: "image/jpeg",
+                                data: base64Image
+                            }
+                        ]
+                    }
+                };
+
+                ws.send(JSON.stringify(frameMessage));
+            }, 1000); // Envía 1 fotograma por segundo
         }
-    };
 
-    ws.onerror = (err) => {
-        log("Error en WebSocket: Verifique API Key.");
-        stopLiveSession();
-    };
+        function disconnect() {
+            if (frameInterval) clearInterval(frameInterval);
+            if (ws) ws.close();
+            
+            isConnected = false;
+            toggleBtn.innerText = "Iniciar Conexión Live";
+            toggleBtn.style.background = "#0284c7";
+        }
 
-    ws.onclose = () => {
-        log("Conexión cerrada.");
-        stopLiveSession();
-    };
-}
-
-async function startAudioInput() {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const source = audioCtx.createMediaStreamSource(mediaStream);
-    
-    audioProcessor = audioCtx.createScriptProcessor(2048, 1, 1);
-    source.connect(audioProcessor);
-    audioProcessor.connect(audioCtx.destination);
-
-    audioProcessor.onaudioprocess = (e) => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = floatTo16BitPCM(inputData);
-        const base64Audio = arrayBufferToBase64(pcm16);
-        
-        const audioMsg = {
-            realtimeInput: {
-                mediaChunks: [{
-                    mimeType: "audio/pcm;rate=16000",
-                    data: base64Audio
-                }]
-            }
-        };
-        ws.send(JSON.stringify(audioMsg));
-    };
-}
-
-function startVideoFrames() {
-    frameInterval = setInterval(() => {
-        if (!ws || ws.readyState !== WebSocket.OPEN || !video.srcObject) return;
-        
-        canvas.width = 320;
-        canvas.height = 240;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const base64Image = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-
-        const videoMsg = {
-            realtimeInput: {
-                mediaChunks: [{
-                    mimeType: "image/jpeg",
-                    data: base64Image
-                }]
-            }
-        };
-        ws.send(JSON.stringify(videoMsg));
-    }, 1000);
-}
-
-function playPcmAudio(base64Pcm) {
-    setStatus("Gabi hablando...", "speaking");
-    const arrayBuffer = base64ToArrayBuffer(base64Pcm);
-    const float32Data = pcm16ToFloat32(arrayBuffer);
-    
-    const playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-    const buffer = playCtx.createBuffer(1, float32Data.length, 24000);
-    buffer.getChannelData(0).set(float32Data);
-    
-    const source = playCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(playCtx.destination);
-    source.start();
-    
-    source.onended = () => {
-        setStatus("Conectado", "connected");
-    };
-}
-
-function stopLiveSession() {
-    if (ws) { ws.close(); ws = null; }
-    if (frameInterval) { clearInterval(frameInterval); frameInterval = null; }
-    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
-    if (audioCtx) { audioCtx.close(); audioCtx = null; }
-    
-    btnToggle.innerText = "Iniciar Conexión Live";
-    btnToggle.className = "btn";
-    setStatus("Desconectado", "");
-}
-
-btnToggle.addEventListener('click', () => {
-    if (ws) { stopLiveSession(); } else { startLiveSession(); }
-});
-
-function floatTo16BitPCM(output) {
-    const buffer = new ArrayBuffer(output.length * 2);
-    const view = new DataView(buffer);
-    for (let i = 0; i < output.length; i++) {
-        let s = Math.max(-1, Math.min(1, output[i]));
-        view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-    return buffer;
-}
-
-function pcm16ToFloat32(arrayBuffer) {
-    const view = new DataView(arrayBuffer);
-    const float32 = new Float32Array(arrayBuffer.byteLength / 2);
-    for (let i = 0; i < float32.length; i++) {
-        const int16 = view.getInt16(i * 2, true);
-        float32[i] = int16 < 0 ? int16 / 32768 : int16 / 32767;
-    }
-    return float32;
-}
-
-function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
-}
-
-function base64ToArrayBuffer(base64) {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-    return bytes.buffer;
-}
-</script>
+        // Iniciar cámara automáticamente al cargar
+        initCamera();
+    </script>
 </body>
 </html>
