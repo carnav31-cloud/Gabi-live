@@ -37,7 +37,7 @@
 
         async function initCamera() {
             try {
-                // FORZAR CÁMARA TRASERA
+                // Mantenemos la configuración de cámara trasera
                 mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: "environment" } },
                     audio: true
@@ -63,8 +63,7 @@
             };
 
             ws.onmessage = (event) => {
-                // Esto nos dirá exactamente qué error envía Google si se cierra
-                log("Recibido: " + event.data.substring(0, 50));
+                log("Respuesta recibida.");
             };
 
             ws.onclose = (event) => {
